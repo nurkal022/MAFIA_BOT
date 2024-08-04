@@ -1,4 +1,5 @@
-import asyncio # testing #test
+import asyncio # testing #test test
+
 from aiogram import Bot, Dispatcher
 from app.config import TOKEN
 from app.handlers.commands import set_private_commands, set_group_commands
