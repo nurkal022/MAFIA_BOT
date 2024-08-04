@@ -49,8 +49,8 @@ def create_vote_keyboard(players):
 
 def create_starte_game_keyboard(username):
     buttons = [InlineKeyboardButton(
-        text="Начать личный чат с ботом",
-        url=f"https://t.me/{username}?start=private_chat"
+        text="🤵🏻 Присодинится",
+        url=f"https://t.me/{username}"
     )]
     return InlineKeyboardMarkup(inline_keyboard=[buttons])
 

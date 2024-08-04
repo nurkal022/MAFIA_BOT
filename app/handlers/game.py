@@ -172,6 +172,7 @@ async def handle_vote(callback: CallbackQuery):
 def get_roles(num_players):
     roles = {
         4: ['role_civilian', 'role_civilian', 'role_doctor', 'role_mafia'],    ####role_don
+        3: ['role_civilian',  'role_doctor', 'role_mafia'],    
         5: ['role_civilian', 'role_civilian', 'role_civilian', 'role_doctor', 'role_don'],
         6: ['role_civilian', 'role_civilian', 'role_mafia', 'role_don', 'role_doctor', 'role_commissar'],
         7: ['role_civilian', 'role_civilian', 'role_sergeant', 'role_doctor', 'role_commissar', 'role_mafia', 'role_don'],
@@ -212,15 +213,12 @@ async def night_phase(chat_id, bot):
     await bot.send_message(chat_id,f"Ночь {day_count}\nНа улицы города выходят лишь самые отважные и бесстрашные. Утром попробуем сосчитать их головы...", reply_markup=kb.create_starte_game_keyboard(bot_username))
     
     # Логика для мафии
-    await bot.send_message(chat_id, "🔪 Маньяк спрятался глубоко в кустах...")
     mafia_members = [player for player in players if player.get('role') == 'role_mafia']
     for member in mafia_members:
         victim_keyboard = kb.create_victim_keyboard(players)
         await bot.send_message(member['id'], "🔪 Выберите жертву.", reply_markup=victim_keyboard)
-    await asyncio.sleep(5)
     
     # Логика для Комиссара
-    await bot.send_message(chat_id, "🕵️‍ Комиссар Каттани уже зарядил свой пистолет...")
     commissar = next((player for player in players if player.get('role') == 'role_commissar'), None)
     if commissar:
         check_keyboard = kb.create_victim_keyboard(players)
@@ -228,10 +226,8 @@ async def night_phase(chat_id, bot):
         bot_info = await bot.get_me()
         bot_username = bot_info.username
         await bot.send_message(chat_id, f"{commissar['name']}, перейдите в личный чат с ботом для выбора проверки: t.me/{bot_username}")
-    await asyncio.sleep(5)
 
     # Логика для Доктора
-    await bot.send_message(chat_id, "👨🏼‍⚕️ Доктор вышел на ночное дежурство...")
     doctor = next((player for player in players if player.get('role') == 'role_doctor'), None)
     if doctor:
         heal_keyboard = kb.create_victim_keyboard(players)
@@ -239,15 +235,27 @@ async def night_phase(chat_id, bot):
         bot_info = await bot.get_me()
         bot_username = bot_info.username
     
-        await bot.send_message(chat_id, f"{doctor['name']}, перейдите в личный чат с ботом для выбора лечения: t.me/{bot_username}")
-    await asyncio.sleep(5)
+        # await bot.send_message(chat_id, f"{doctor['name']}, перейдите в личный чат с ботом для выбора лечения: t.me/{bot_username}")
+    
+    
+    
+    await bot.send_message(chat_id, "🕵️‍ Комиссар Каттани уже зарядил свой пистолет...")
+    await asyncio.sleep(10)
+    await bot.send_message(chat_id, "👨🏼‍⚕️ Доктор вышел на ночное дежурство...")
+    await asyncio.sleep(10)
+    await bot.send_message(chat_id, "🔪 Маньяк спрятался глубоко в кустах...")
+    await asyncio.sleep(10)
+
+
 
     await process_night_results(chat_id, bot)
     await day_phase(chat_id, bot)
 
 async def process_night_results(chat_id, bot):
+    print(players)
+    print("*************")
     # Список жертв, которые выбрала мафия
-    mafia_target = [player['id'] for player in players if 'target' in player]
+    mafia_target = [player['target'] for player in players if 'target' in player]
 
     # Логика для Доктора
     doctor_target = next((player['heal'] for player in players if player.get('heal')), None)
@@ -259,7 +267,7 @@ async def process_night_results(chat_id, bot):
         commissar = next(player for player in players if player.get('role') == 'role_commissar')
         await bot.send_message(commissar['id'], f"Результат проверки: {check_result}")
 
-    # Проверка, была ли жертва мафии вылечена доктором
+    # Проверка
     if doctor_target in mafia_target:
         await bot.send_message(chat_id, "💉 Доктор вылечил игрока, которого выбрала мафия.")
         logging.info("Доктор вылечил игрока.")
@@ -269,7 +277,7 @@ async def process_night_results(chat_id, bot):
             await bot.send_message(chat_id, f"💀 Игрок {victim['name']} был убит мафией.")
             logging.info(f"Игрок {victim['name']} был убит мафией.")
             players.remove(victim)
-    
+
     # Очистка временных данных
     for player in players:
         player.pop('target', None)
@@ -287,7 +295,6 @@ async def day_phase(chat_id, bot):
     #         "🔍 Началось голосование. Выберите подозреваемого."
     bot_info = await bot.get_me()
     bot_username = bot_info.username
-    
     await bot.send_message(chat_id, f"День {day_count}\nСолнце всходит, подсушивая на тротуарах пролитую ночью кровь...", reply_markup=kb.create_starte_game_keyboard(bot_username))
     logging.info(f"Начался День {day_count}.")
     
@@ -348,5 +355,10 @@ async def end_game(chat_id, bot):
     await bot.send_message(chat_id, "🏁 Игра окончена. Спасибо за участие!")
     logging.info("Игра окончена.")
     # Очистка данных для новой игры
+    # Очистка данных для новой игры
+    print("#######################3")
+
+    print(players)
+    print("#######################3")
     players.clear()
     game_status = "stopped"
