@@ -4,10 +4,6 @@ from app.config import TOKEN
 from app.handlers.commands import set_private_commands, set_group_commands
 from app.handlers import game,profile,start,callbacks,commands,admin
 
-
-
-#dfgr
-#ree
 async def main():
     bot = Bot(token=TOKEN)
     dp = Dispatcher()
