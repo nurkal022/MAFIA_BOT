@@ -70,7 +70,7 @@ async def start_game(message: Message):
     bot_info = await message.bot.get_me()
     bot_username = bot_info.username
     game_status = "running"
-    await message.answer("Игра 'Мафия' начинается!",reply_markup=kb.create_starte_game_keyboard(bot_username))
+    await message.answer("Ведется набор в игру!",reply_markup=kb.create_starte_game_keyboard(bot_username))
     logging.info("Игра началась: распределение ролей.")
     await distribute_roles(message.chat.id, message.bot)
 
@@ -94,7 +94,7 @@ async def join_game(callback: CallbackQuery, db: Session = next(get_db())):
     else:
         await callback.answer('Вы уже в игре!')
 
-    player_list = '\n'.join([player['name'] for player in players])
+    player_list = ', '.join([player['name'] for player in players])
     current_text = callback.message.text or ""
     new_text = f"Игроки, присоединившиеся к игре:\n{player_list}"
     if current_text != new_text:
