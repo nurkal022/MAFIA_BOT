@@ -13,7 +13,7 @@ group_menu = InlineKeyboardMarkup(inline_keyboard=[
 ])
 
 join_game_menu = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text='Присоединиться', callback_data='join_game')],
+    [InlineKeyboardButton(text='🤵🏻 Присоединиться', callback_data='join_game')],
 ])
 
 def create_roles_keyboard():
@@ -49,7 +49,7 @@ def create_vote_keyboard(players):
 
 def create_starte_game_keyboard(username):
     buttons = [InlineKeyboardButton(
-        text="🤵🏻 Присодинится",
+        text="Перейти к боту",
         url=f"https://t.me/{username}"
     )]
     return InlineKeyboardMarkup(inline_keyboard=[buttons])

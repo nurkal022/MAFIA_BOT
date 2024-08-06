@@ -9,7 +9,10 @@ from aiogram.filters import Command
 import asyncio
 import random
 from aiogram.types import InputFile
+import time
 
+# Добавляем переменную для отслеживания начала игры
+start_time = None
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 
@@ -36,6 +39,33 @@ role_descriptions = {
     'role_kamikaze': 'Камикадзе: Может взорваться, убивая себя и окружающих.'
 }
 
+def generate_player_list(players):
+    roles_icons = {
+        'role_civilian': '👨🏼 Мирный житель',
+        'role_don': '🤵🏻 Дон',
+        'role_mafia': '👹 Мафия',
+        'role_commissar': '👮‍♂️ Комиссар',
+        'role_sergeant': '👮‍♂️ Сержант',
+        'role_doctor': '👨🏼‍⚕️ Доктор',
+        'role_maniac': '🔪 Маньяк',
+        'role_lover': '❤️ Любовница',
+        'role_lawyer': '👨‍⚖️ Адвокат',
+        'role_suicide': '💣 Самоубийца',
+        'role_hobo': '🧙🏼‍♂️ Бомж',
+        'role_lucky': '🍀 Счастливчик',
+        'role_kamikaze': '💥 Камикадзе'
+    }
+
+    player_links = []
+    for i, player in enumerate(players, start=1):
+        player_link = f'{i}. <a href="tg://user?id={player["id"]}">{player["name"]}</a>'
+        player_links.append(player_link)
+
+    roles_list = ", ".join(roles_icons[role['role']] for role in players)
+    total_players = len(players)
+
+    return f"Живые игроки:\n" + "\n".join(player_links) + f"\n\nКто-то из них:\n{roles_list}\nВсего: {total_players} чел.\n\nСейчас самое время обсудить результаты ночи, разобраться в причинах и следствиях..."
+
 
 @router.message(Command("create_game"), F.chat.type.in_(['group', 'supergroup']))
 async def start_collecting_players(message: Message):
@@ -47,7 +77,7 @@ async def start_collecting_players(message: Message):
     game_status = "collecting"
     players.clear()
     day_count = 1  # Сброс счетчика дней при создании новой игры
-    await message.answer("Игра 'Мафия' начинается! Нажмите кнопку 'Присоединиться', чтобы участвовать в игре.", reply_markup=kb.join_game_menu)
+    await message.answer("<b>Ведется набор в игру!</b>", reply_markup=kb.join_game_menu)
 
 @router.message(Command("cancel"), F.chat.type.in_(['group', 'supergroup']))
 async def cancel_game(message: Message):
@@ -63,14 +93,15 @@ async def cancel_game(message: Message):
 
 @router.message(Command("start_game"), F.chat.type.in_(['group', 'supergroup']))
 async def start_game(message: Message):
-    global game_status
+    global game_status, start_time
     if not players:
         await message.answer("Недостаточно игроков для начала игры.")
         return
     bot_info = await message.bot.get_me()
     bot_username = bot_info.username
     game_status = "running"
-    await message.answer("Ведется набор в игру!",reply_markup=kb.create_starte_game_keyboard(bot_username))
+    start_time = time.time()  # Запоминаем время начала игры
+    await message.answer("Игра 'Мафия' начинается!", reply_markup=kb.create_starte_game_keyboard(bot_username))
     logging.info("Игра началась: распределение ролей.")
     await distribute_roles(message.chat.id, message.bot)
 
@@ -94,12 +125,14 @@ async def join_game(callback: CallbackQuery, db: Session = next(get_db())):
     else:
         await callback.answer('Вы уже в игре!')
 
-    player_list = ', '.join([player['name'] for player in players])
+    # Генерация кликабельного списка игроков
+    player_list = ', '.join([f'<a href="tg://user?id={player["id"]}">{player["name"]}</a>' for player in players])
     current_text = callback.message.text or ""
-    new_text = f"Игроки, присоединившиеся к игре:\n{player_list}"
+    new_text = f"<b>Ведётся набор в игру</b>\n\nЗарегистрировались:\n{player_list}\n\nИтого <b>{len(players)}</b>."
     if current_text != new_text:
-        await callback.message.edit_text(new_text, reply_markup=kb.join_game_menu)
+        await callback.message.edit_text(new_text, reply_markup=kb.join_game_menu, parse_mode='HTML')
     logging.info(f"Игрок {user.full_name} присоединился к игре.")
+
 
 @router.callback_query(F.data.startswith('victim_'))
 async def handle_victim_selection(callback: CallbackQuery):
@@ -192,6 +225,35 @@ def get_roles(num_players):
     }
     return roles.get(num_players, ['role_civilian'] * num_players)
 
+
+def generate_player_list(players):
+    roles_icons = {
+        'role_civilian': '👨🏼 Мирный житель',
+        'role_don': '🤵🏻 Дон',
+        'role_mafia': '👹 Мафия',
+        'role_commissar': '👮‍♂️ Комиссар',
+        'role_sergeant': '👮‍♂️ Сержант',
+        'role_doctor': '👨🏼‍⚕️ Доктор',
+        'role_maniac': '🔪 Маньяк',
+        'role_lover': '❤️ Любовница',   
+        'role_lawyer': '👨‍⚖️ Адвокат',
+        'role_suicide': '💣 Самоубийца',
+        'role_hobo': '🧙🏼‍♂️ Бомж',
+        'role_lucky': '🍀 Счастливчик',
+        'role_kamikaze': '💥 Камикадзе'
+    }
+
+    player_links = []
+    for i, player in enumerate(players, start=1):
+        player_link = f'<a href="tg://user?id={player["id"]}">{i}. {player["name"]}</a>'
+        player_links.append(player_link)
+
+    roles_list = ", ".join(roles_icons[role['role']] for role in players)
+    total_players = len(players)
+
+    return f"Живые игроки:\n" + "\n".join(player_links) + f"\n\nКто-то из них:\n{roles_list}\nВсего: {total_players} чел.\n\nСейчас самое время обсудить результаты ночи, разобраться в причинах и следствиях..."
+
+
 async def distribute_roles(chat_id, bot: Bot):
     num_players = len(players)
     roles = get_roles(num_players)
@@ -199,8 +261,6 @@ async def distribute_roles(chat_id, bot: Bot):
     for player, role in zip(players, roles):
         player['role'] = role
         await bot.send_message(player['id'], f"Ваша роль: {role_descriptions[role]}")
-
-    await bot.send_message(chat_id, "Роли распределены! Начинаем ночную фазу.")
     logging.info("Роли распределены.")
     await night_phase(chat_id, bot)
 
@@ -211,6 +271,9 @@ async def night_phase(chat_id, bot):
     bot_info = await bot.get_me()
     bot_username = bot_info.username
     await bot.send_message(chat_id,f"Ночь {day_count}\nНа улицы города выходят лишь самые отважные и бесстрашные. Утром попробуем сосчитать их головы...", reply_markup=kb.create_starte_game_keyboard(bot_username))
+    
+    # Отправка списка игроков после ночной фазы
+    await bot.send_message(chat_id, generate_player_list(players), parse_mode='HTML', reply_markup=kb.create_starte_game_keyboard(bot_username))
     
     # Логика для мафии
     mafia_members = [player for player in players if player.get('role') == 'role_mafia']
@@ -234,10 +297,8 @@ async def night_phase(chat_id, bot):
         await bot.send_message(doctor['id'], "🩺 Выберите игрока для лечения.", reply_markup=heal_keyboard)
         bot_info = await bot.get_me()
         bot_username = bot_info.username
-    
-        # await bot.send_message(chat_id, f"{doctor['name']}, перейдите в личный чат с ботом для выбора лечения: t.me/{bot_username}")
-    
-    
+      
+
     
     await bot.send_message(chat_id, "🕵️‍ Комиссар Каттани уже зарядил свой пистолет...")
     await asyncio.sleep(10)
@@ -246,14 +307,12 @@ async def night_phase(chat_id, bot):
     await bot.send_message(chat_id, "🔪 Маньяк спрятался глубоко в кустах...")
     await asyncio.sleep(10)
 
-
-
     await process_night_results(chat_id, bot)
+    await bot.send_message(chat_id, generate_player_list(players), parse_mode='HTML')
+
     await day_phase(chat_id, bot)
 
 async def process_night_results(chat_id, bot):
-    print(players)
-    print("*************")
     # Список жертв, которые выбрала мафия
     mafia_target = [player['target'] for player in players if 'target' in player]
 
@@ -298,7 +357,17 @@ async def day_phase(chat_id, bot):
     await bot.send_message(chat_id, f"День {day_count}\nСолнце всходит, подсушивая на тротуарах пролитую ночью кровь...", reply_markup=kb.create_starte_game_keyboard(bot_username))
     logging.info(f"Начался День {day_count}.")
     
+    # Отправка списка игроков после ночной фазы
+    await bot.send_message(chat_id, generate_player_list(players), parse_mode='HTML')
+
+    #sleep(30)
     # Логика для обсуждения и голосования
+    bot_info = await bot.get_me()
+    bot_username = bot_info.username
+    await bot.send_message(chat_id, "<b>Пришло время опреелить и наказать виновных.\nГолосование продлится 30 секунд</b>", reply_markup=kb.create_starte_game_keyboard(bot_username), parse_mode='HTML')
+    
+    
+    #########################
     vote_keyboard = kb.create_vote_keyboard(players)
     for player in players:
         await bot.send_message(player['id'], "🔍 Голосование: выберите подозреваемого.", reply_markup=vote_keyboard)
@@ -351,14 +420,28 @@ async def check_game_status(chat_id, bot):
         await night_phase(chat_id, bot)
 
 async def end_game(chat_id, bot):
-    global game_status
-    await bot.send_message(chat_id, "🏁 Игра окончена. Спасибо за участие!")
-    logging.info("Игра окончена.")
-    # Очистка данных для новой игры
-    # Очистка данных для новой игры
-    print("#######################3")
+    global game_status, start_time
+    end_time = time.time()  # Время окончания игры
+    duration = end_time - start_time  # Длительность игры в секундах
+    duration_str = time.strftime("%M мин. %S сек.", time.gmtime(duration))
 
-    print(players)
-    print("#######################3")
+    winners = [player for player in players if player.get('role') not in ['role_mafia', 'role_don']]
+    losers = [player for player in players if player.get('role') in ['role_mafia', 'role_don']]
+
+    # Генерация списка победителей
+    winner_list = '\n'.join([f'<a href="tg://user?id={player["id"]}">{player["name"]}</a> - {role_descriptions[player["role"]]}' for player in winners])
+    
+    # Генерация списка проигравших
+    loser_list = '\n'.join([f'<a href="tg://user?id={player["id"]}">{player["name"]}</a> - {role_descriptions[player["role"]]}' for player in losers])
+    
+    message = (f"Игра окончена!\n\n"
+               f"Победили:\n{winner_list}\n\n"
+               f"Остальные участники:\n{loser_list}\n\n"
+               f"Игра длилась: {duration_str}")
+
+    await bot.send_message(chat_id, message, parse_mode='HTML')
+    logging.info("Игра окончена.")
+
+    # Очистка данных для новой игры
     players.clear()
     game_status = "stopped"
