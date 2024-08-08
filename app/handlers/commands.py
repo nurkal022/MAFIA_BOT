@@ -18,10 +18,17 @@ async def set_private_commands(bot):
 async def set_group_commands(bot):
     group_commands = [
         BotCommand(command="/start_game", description="start the game"),
-        BotCommand(command="/create_game", description="create the game"),
+        BotCommand(command="/game", description="create the game"),
         BotCommand(command="/next", description="notification about next game"),
+        BotCommand(command="/extend", description="extend registration game"),
+        BotCommand(command="/stop", description="extend registration game"),
+        BotCommand(command="/top", description="extend registration game"),
         BotCommand(command="/settings", description="notification about next game"),
         BotCommand(command="/cancel", description="cancel the game"),
+        BotCommand(command="/balance", description="cancel the game"),
+        BotCommand(command="/prolong", description="cancel the game"),
+        BotCommand(command="/give", description="cancel the game"),
+        BotCommand(command="/help", description="cancel the game"),
         BotCommand(command="/share", description="cancel the game")]
     await bot.set_my_commands(group_commands, scope=BotCommandScopeAllGroupChats())
 
@@ -36,12 +43,14 @@ async def on_chat_member_updated(event: ChatMemberUpdated):
         )
         
         
-# # Добавление команд для администраторов
-# async def set_admin_commands(bot):
-#     admin_commands = [
-#         BotCommand(command="/add_admin", description="Add a new admin"),
-#         BotCommand(command="/remove_admin", description="Remove an admin"),
-#         BotCommand(command="/stop_bot", description="Stop the bot"),
-#         BotCommand(command="/restart_game", description="Restart the game")
-#     ]
-#     await bot.set_my_commands(admin_commands, scope=BotCommandScopeAllChatAdministrators())
+# Добавление команд для администраторов
+async def set_admin_commands(bot):
+    admin_commands = [
+        BotCommand(command="/add_admin", description="Add a new admin"),
+        BotCommand(command="/remove_admin", description="Remove an admin"),
+        BotCommand(command="/stop_bot", description="Stop the bot"),
+        BotCommand(command="/restart_game", description="Restart the game"),
+        BotCommand(command="/game", description="Create game"),
+        BotCommand(command="/start_game", description="Start game")
+    ]
+    await bot.set_my_commands(admin_commands, scope=BotCommandScopeAllChatAdministrators())

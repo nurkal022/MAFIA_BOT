@@ -27,7 +27,7 @@ role_descriptions = {
     'role_civilian': 'Мирный житель: Обычный житель города, не обладающий особыми способностями.',
     'role_don': 'Дон: Глава мафии, имеет возможность проверять игроков на принадлежность к мафии.',
     'role_mafia': 'Мафия: Член мафии, цель - уничтожить всех мирных жителей.',
-    'role_commissar': 'Комиссар Каттани: Может проверять игроков на принадлежность к мафии.',
+    'role_commissar': 'Комиссар Каттани: Может проверять игроков на принадлежность к мафии или убивать.',
     'role_sergeant': 'Сержант: Помогает комиссару в его расследованиях.',
     'role_doctor': 'Доктор: Может лечить игроков и спасать их от убийства.',
     'role_maniac': 'Маньяк: Убивает игроков, но не принадлежит ни к одной из сторон.',
@@ -58,16 +58,15 @@ def generate_player_list(players):
 
     player_links = []
     for i, player in enumerate(players, start=1):
-        player_link = f'{i}. <a href="tg://user?id={player["id"]}">{player["name"]}</a>'
+        player_link = f'<a href="tg://user?id={player["id"]}">{i}. {player["name"]}</a>'
         player_links.append(player_link)
 
     roles_list = ", ".join(roles_icons[role['role']] for role in players)
     total_players = len(players)
 
-    return f"Живые игроки:\n" + "\n".join(player_links) + f"\n\nКто-то из них:\n{roles_list}\nВсего: {total_players} чел.\n\nСейчас самое время обсудить результаты ночи, разобраться в причинах и следствиях..."
+    return f"<b>Живые игроки:</b>\n" + "\n".join(player_links) + f"\n\nКто-то из них:\n{roles_list}\nВсего: {total_players} чел.\n\nСейчас самое время обсудить результаты ночи, разобраться в причинах и следствиях..."
 
-
-@router.message(Command("create_game"), F.chat.type.in_(['group', 'supergroup']))
+@router.message(Command("game"), F.chat.type.in_(['group', 'supergroup']))
 async def start_collecting_players(message: Message):
     global game_status, day_count
     if game_status != "stopped":
@@ -77,7 +76,7 @@ async def start_collecting_players(message: Message):
     game_status = "collecting"
     players.clear()
     day_count = 1  # Сброс счетчика дней при создании новой игры
-    await message.answer("<b>Ведется набор в игру!</b>", reply_markup=kb.join_game_menu)
+    await message.answer("<b>Ведется набор в игру!</b>", reply_markup=kb.join_game_menu, parse_mode="HTML")
 
 @router.message(Command("cancel"), F.chat.type.in_(['group', 'supergroup']))
 async def cancel_game(message: Message):
@@ -106,6 +105,16 @@ async def start_game(message: Message):
     await distribute_roles(message.chat.id, message.bot)
 
 
+
+@router.message(Command("share"), F.chat.type.in_(['group', 'supergroup']))
+async def share_group(message: Message):
+    group_invite_link = "https://t.me/joinchat/XXXXXXXXXXXXXXX"  # Замените на реальную ссылку приглашения в вашу группу
+    share_keyboard = kb.create_social_share_keyboard(group_invite_link)
+    await message.answer("Пригласи в этот чат друзей из других мессенджеров и социальных сетей:", reply_markup=share_keyboard)
+
+
+
+
 @router.callback_query(F.data == 'join_game')
 async def join_game(callback: CallbackQuery, db: Session = next(get_db())):
     user = callback.from_user
@@ -132,7 +141,6 @@ async def join_game(callback: CallbackQuery, db: Session = next(get_db())):
     if current_text != new_text:
         await callback.message.edit_text(new_text, reply_markup=kb.join_game_menu, parse_mode='HTML')
     logging.info(f"Игрок {user.full_name} присоединился к игре.")
-
 
 @router.callback_query(F.data.startswith('victim_'))
 async def handle_victim_selection(callback: CallbackQuery):
@@ -166,6 +174,8 @@ async def handle_heal_selection(callback: CallbackQuery):
     logging.info(f"Доктор выбрал для лечения: {heal_name}.")
     await callback.message.bot.send_message(callback.message.chat.id, f"{callback.from_user.full_name} выбрал для лечения {heal_name}.")
 
+
+
 @router.callback_query(F.data.startswith('check_'))
 async def handle_check_selection(callback: CallbackQuery):
     user_id = callback.from_user.id
@@ -181,6 +191,36 @@ async def handle_check_selection(callback: CallbackQuery):
     await callback.answer("Игрок выбран для проверки.")
     logging.info(f"Комиссар выбрал для проверки: {check_name}.")
     await callback.message.bot.send_message(callback.message.chat.id, f"{callback.from_user.full_name} выбрал для проверки {check_name}.")
+
+@router.callback_query(F.data.startswith('kill_'))
+async def handle_kill_selection(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    kill_id = int(callback.data.split('_')[1])
+    
+    for player in players:
+        if player['id'] == user_id and player.get('role') == 'role_commissar':
+            player['kill'] = kill_id
+            break
+    
+    kill_name = next(player['name'] for player in players if player['id'] == kill_id)
+    await callback.message.edit_text(f"🔫 Вы выбрали для убийства: {kill_name}.")
+    await callback.answer("Игрок выбран для убийства.")
+    logging.info(f"Комиссар выбрал для убийства: {kill_name}.")
+    # await callback.message.bot.send_message(callback.message.chat.id, f"{callback.from_user.full_name} выбрал для убийства {kill_name}.")
+    
+@router.callback_query(F.data.startswith('commissar_action_'))
+async def handle_commissar_action(callback: CallbackQuery):
+    action = callback.data.split('_')[2]
+    user_id = callback.from_user.id
+
+    if action == 'check':
+        await callback.message.edit_text("🔍 Выберите игрока для проверки.", reply_markup=kb.create_victim_keyboard(players, 'check'))
+    elif action == 'kill':
+        await callback.message.edit_text("🔫 Выберите игрока для убийства.", reply_markup=kb.create_victim_keyboard(players, 'kill'))
+
+    await callback.answer()
+
+
 
 @router.callback_query(F.data.startswith('vote_'))
 async def handle_vote(callback: CallbackQuery):
@@ -204,8 +244,9 @@ async def handle_vote(callback: CallbackQuery):
 
 def get_roles(num_players):
     roles = {
-        4: ['role_civilian', 'role_civilian', 'role_doctor', 'role_mafia'],    ####role_don
+        2: ['role_commissar' , 'role_mafia'],    ####role_don
         3: ['role_civilian',  'role_doctor', 'role_mafia'],    
+        4: ['role_civilian', 'role_civilian', 'role_doctor', 'role_mafia'],    ####role_don
         5: ['role_civilian', 'role_civilian', 'role_civilian', 'role_doctor', 'role_don'],
         6: ['role_civilian', 'role_civilian', 'role_mafia', 'role_don', 'role_doctor', 'role_commissar'],
         7: ['role_civilian', 'role_civilian', 'role_sergeant', 'role_doctor', 'role_commissar', 'role_mafia', 'role_don'],
@@ -221,38 +262,9 @@ def get_roles(num_players):
         17: ['role_civilian', 'role_civilian', 'role_civilian', 'role_civilian', 'role_kamikaze', 'role_lover', 'role_sergeant', 'role_hobo', 'role_commissar', 'role_sergeant', 'role_mafia', 'role_mafia', 'role_mafia', 'role_don', 'role_maniac', 'role_doctor'],
         18: ['role_civilian', 'role_civilian', 'role_civilian', 'role_civilian', 'role_kamikaze', 'role_sergeant', 'role_commissar', 'role_sergeant', 'role_lover', 'role_mafia', 'role_mafia', 'role_mafia', 'role_don', 'role_maniac', 'role_doctor', 'role_hobo'],
         19: ['role_civilian', 'role_civilian', 'role_civilian', 'role_civilian', 'role_civilian', 'role_hobo', 'role_commissar', 'role_sergeant', 'role_doctor', 'role_sergeant', 'role_kamikaze', 'role_lover', 'role_maniac', 'role_mafia', 'role_mafia', 'role_mafia', 'role_don', 'role_maniac'],
-        20: ['role_civilian', 'role_civilian', 'role_civilian', 'role_civilian', 'role_civilian', 'role_sergeant', 'role_lover', 'role_commissar', 'role_sergeant', 'role_doctor', 'role_kamikaze', 'role_mafia', 'role_mafia', 'role_mafia', 'role_don', 'role_maniac', 'role_hobo']
+        20: ['role_civilian', 'role_civilian', 'role_civilian', 'role_civilian', 'role_civilian', 'role_sergeant', 'role_lover', 'role_commissar', 'role_sergeant', 'role_doctor', 'role_kamikaze', 'role_mafia', 'role_mafia', 'role_mafia', 'role_don', 'role_maniак', 'role_hobo']
     }
     return roles.get(num_players, ['role_civilian'] * num_players)
-
-
-def generate_player_list(players):
-    roles_icons = {
-        'role_civilian': '👨🏼 Мирный житель',
-        'role_don': '🤵🏻 Дон',
-        'role_mafia': '👹 Мафия',
-        'role_commissar': '👮‍♂️ Комиссар',
-        'role_sergeant': '👮‍♂️ Сержант',
-        'role_doctor': '👨🏼‍⚕️ Доктор',
-        'role_maniac': '🔪 Маньяк',
-        'role_lover': '❤️ Любовница',   
-        'role_lawyer': '👨‍⚖️ Адвокат',
-        'role_suicide': '💣 Самоубийца',
-        'role_hobo': '🧙🏼‍♂️ Бомж',
-        'role_lucky': '🍀 Счастливчик',
-        'role_kamikaze': '💥 Камикадзе'
-    }
-
-    player_links = []
-    for i, player in enumerate(players, start=1):
-        player_link = f'<a href="tg://user?id={player["id"]}">{i}. {player["name"]}</a>'
-        player_links.append(player_link)
-
-    roles_list = ", ".join(roles_icons[role['role']] for role in players)
-    total_players = len(players)
-
-    return f"Живые игроки:\n" + "\n".join(player_links) + f"\n\nКто-то из них:\n{roles_list}\nВсего: {total_players} чел.\n\nСейчас самое время обсудить результаты ночи, разобраться в причинах и следствиях..."
-
 
 async def distribute_roles(chat_id, bot: Bot):
     num_players = len(players)
@@ -265,12 +277,12 @@ async def distribute_roles(chat_id, bot: Bot):
     await night_phase(chat_id, bot)
 
 async def night_phase(chat_id, bot):
+    global day_count
     await bot.send_animation(chat_id, "CgACAgIAAxkBAAIC72aowkm0WBCMMiOvX7s-3SduoKH0AALeRgACPEsYSdPGShSs6JwHNQQ")
-    logging.info("Началась ночь {day_count}.")
-    #         "🔍 Началось голосование. Выберите подозреваемого."
+    logging.info(f"Началась ночь {day_count}.")
     bot_info = await bot.get_me()
     bot_username = bot_info.username
-    await bot.send_message(chat_id,f"Ночь {day_count}\nНа улицы города выходят лишь самые отважные и бесстрашные. Утром попробуем сосчитать их головы...", reply_markup=kb.create_starte_game_keyboard(bot_username))
+    await bot.send_message(chat_id, f"Ночь {day_count}\nНа улицы города выходят лишь самые отважные и бесстрашные. Утром попробуем сосчитать их головы...", reply_markup=kb.create_starte_game_keyboard(bot_username))
     
     # Отправка списка игроков после ночной фазы
     await bot.send_message(chat_id, generate_player_list(players), parse_mode='HTML', reply_markup=kb.create_starte_game_keyboard(bot_username))
@@ -278,27 +290,19 @@ async def night_phase(chat_id, bot):
     # Логика для мафии
     mafia_members = [player for player in players if player.get('role') == 'role_mafia']
     for member in mafia_members:
-        victim_keyboard = kb.create_victim_keyboard(players)
+        victim_keyboard = kb.create_victim_keyboard(players, 'victim')
         await bot.send_message(member['id'], "🔪 Выберите жертву.", reply_markup=victim_keyboard)
     
     # Логика для Комиссара
     commissar = next((player for player in players if player.get('role') == 'role_commissar'), None)
     if commissar:
-        check_keyboard = kb.create_victim_keyboard(players)
-        await bot.send_message(commissar['id'], "🔍 Выберите игрока для проверки.", reply_markup=check_keyboard)
-        bot_info = await bot.get_me()
-        bot_username = bot_info.username
-        await bot.send_message(chat_id, f"{commissar['name']}, перейдите в личный чат с ботом для выбора проверки: t.me/{bot_username}")
-
+        await bot.send_message(commissar['id'], "Выберите действие:", reply_markup=kb.create_commissar_action_keyboard())
+    
     # Логика для Доктора
     doctor = next((player for player in players if player.get('role') == 'role_doctor'), None)
     if doctor:
-        heal_keyboard = kb.create_victim_keyboard(players)
+        heal_keyboard = kb.create_victim_keyboard(players, 'heal')
         await bot.send_message(doctor['id'], "🩺 Выберите игрока для лечения.", reply_markup=heal_keyboard)
-        bot_info = await bot.get_me()
-        bot_username = bot_info.username
-      
-
     
     await bot.send_message(chat_id, "🕵️‍ Комиссар Каттани уже зарядил свой пистолет...")
     await asyncio.sleep(10)
@@ -312,7 +316,9 @@ async def night_phase(chat_id, bot):
 
     await day_phase(chat_id, bot)
 
+    
 async def process_night_results(chat_id, bot):
+    global players
     # Список жертв, которые выбрала мафия
     mafia_target = [player['target'] for player in players if 'target' in player]
 
@@ -321,10 +327,13 @@ async def process_night_results(chat_id, bot):
 
     # Логика для Комиссара
     commissar_check = next((player['check'] for player in players if player.get('check')), None)
+    commissar_kill = next((player['kill'] for player in players if player.get('kill')), None)
+    
     if commissar_check:
         check_result = "❌ Мафия" if next((player for player in players if player['id'] == commissar_check and player.get('role') in ['role_mafia', 'role_don']), None) else "✅ Не мафия"
         commissar = next(player for player in players if player.get('role') == 'role_commissar')
-        await bot.send_message(commissar['id'], f"Результат проверки: {check_result}")
+        checked_player = next(player for player in players if player['id'] == commissar_check)
+        await bot.send_message(commissar['id'], f"Результат проверки: {checked_player['name']} - {check_result}")
 
     # Проверка
     if doctor_target in mafia_target:
@@ -335,13 +344,30 @@ async def process_night_results(chat_id, bot):
         if victim:
             await bot.send_message(chat_id, f"💀 Игрок {victim['name']} был убит мафией.")
             logging.info(f"Игрок {victim['name']} был убит мафией.")
-            players.remove(victim)
+            players = [player for player in players if player['id'] != victim['id']]
+
+    if commissar_kill:
+        kill_victim = next((player for player in players if player['id'] == commissar_kill), None)
+        if kill_victim:
+            await bot.send_message(chat_id, f"💀 Комиссар убил игрока {kill_victim['name']}.")
+            logging.info(f"Комиссар убил игрока {kill_victim['name']}.")
+            players = [player for player in players if player['id'] != kill_victim['id']]
+
+    # Логирование убитых игроков
+    killed_players = [player for player in players if player['id'] in mafia_target or player['id'] == commissar_kill]
+    for killed in killed_players:
+        death_reason = 'мафией' if killed['id'] in mafia_target else 'комиссаром'
+        await bot.send_message(chat_id, f"Сегодня был жестоко убит {killed['name']}.\nГоворят, у него в гостях был {death_reason}.")
+        logging.info(f"Игрок {killed['name']} был убит {death_reason}.")
 
     # Очистка временных данных
     for player in players:
         player.pop('target', None)
         player.pop('heal', None)
         player.pop('check', None)
+        player.pop('kill', None)
+
+
 
 async def day_phase(chat_id, bot):
     global votes_count, votes_event, day_count
@@ -351,7 +377,6 @@ async def day_phase(chat_id, bot):
     
     await bot.send_animation(chat_id, "CgACAgIAAxkBAAIC8WaowkuPlOmPE5LP2V6E8zaae-8uAAJ0UQACOschSaNjpf2o3gABIzUE")
 
-    #         "🔍 Началось голосование. Выберите подозреваемого."
     bot_info = await bot.get_me()
     bot_username = bot_info.username
     await bot.send_message(chat_id, f"День {day_count}\nСолнце всходит, подсушивая на тротуарах пролитую ночью кровь...", reply_markup=kb.create_starte_game_keyboard(bot_username))
@@ -360,14 +385,8 @@ async def day_phase(chat_id, bot):
     # Отправка списка игроков после ночной фазы
     await bot.send_message(chat_id, generate_player_list(players), parse_mode='HTML')
 
-    #sleep(30)
-    # Логика для обсуждения и голосования
-    bot_info = await bot.get_me()
-    bot_username = bot_info.username
-    await bot.send_message(chat_id, "<b>Пришло время опреелить и наказать виновных.\nГолосование продлится 30 секунд</b>", reply_markup=kb.create_starte_game_keyboard(bot_username), parse_mode='HTML')
+    await bot.send_message(chat_id, "<b>Пришло время определить и наказать виновных.\nГолосование продлится 30 секунд</b>", reply_markup=kb.create_starte_game_keyboard(bot_username), parse_mode='HTML')
     
-    
-    #########################
     vote_keyboard = kb.create_vote_keyboard(players)
     for player in players:
         await bot.send_message(player['id'], "🔍 Голосование: выберите подозреваемого.", reply_markup=vote_keyboard)
