@@ -1,4 +1,5 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+import base64
 
 # Главное меню
 main_menu = InlineKeyboardMarkup(inline_keyboard=[
@@ -19,6 +20,14 @@ join_game_menu = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text='🤵🏻 Присоединиться', callback_data='join_game')],
 ])
 
+
+def create_join_game_button(chat_id: int, bot_username: str):
+    encoded_chat_id = base64.b64encode(str(chat_id).encode()).decode()
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🤵🏻 Присоединиться", callback_data=f"join_{encoded_chat_id}")]
+    ])
+    
+    
 # Меню ролей
 def create_roles_keyboard():
     roles_keyboard = InlineKeyboardMarkup(inline_keyboard=[
